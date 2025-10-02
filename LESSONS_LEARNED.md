@@ -311,6 +311,96 @@ std::string content((std::istreambuf_iterator<char>(file)),
 
 ---
 
+## OpenCL Keyword Conflicts
+
+### Problem: Using Reserved Keywords as Parameter Names
+**Symptom**: 
+```
+error: invalid parameter name: 'kernel' is a keyword
+```
+
+**Code**:
+```c
+__kernel void convolve(__constant float* kernel, ...)  // ✗ WRONG
+```
+
+**Root Cause**: `kernel` is a reserved keyword in OpenCL. Using it as a parameter name causes compilation failure across all platforms (NVIDIA, Intel CPU, Intel GPU).
+
+**Solution**: Rename parameter to non-reserved identifier:
+```c
+__kernel void convolve(__constant float* filter, ...)  // ✓ CORRECT
+```
+
+**Lesson**: OpenCL has strict keyword restrictions. Common conflicts:
+- `kernel` - language keyword
+- `image` - built-in type
+- `sampler` - built-in type
+- Any OpenCL C built-in function names
+
+Always check OpenCL specification for reserved identifiers when naming parameters.
+
+---
+
+## When OpenCL Becomes Optimal
+
+### Discovery: Arithmetic Intensity Determines GPU Advantage
+
+Through systematic testing across 7 examples, we identified the **critical threshold** where OpenCL outperforms CPU parallelization:
+
+**Operations-per-memory-access ratio:**
+```
+< 10 ops/access:     CPU wins (OpenMP 6-12x, OpenCL slower)
+10-50 ops/access:    Break-even zone
+> 50 ops/access:     GPU wins (OpenCL 50-150x, OpenMP plateaus at 6-12x)
+```
+
+**Empirical Results:**
+
+| Example | Ops/Access | Winner | Best Speedup |
+|---------|-----------|--------|--------------|
+| Vector addition | 1 | CPU | OpenMP 1x, OpenCL 0.25x |
+| Matrix-vector (4K) | ~10 | CPU | OpenMP 11x, OpenCL 4x |
+| Matrix multiply (2K) | ~2000 | GPU | OpenCL 155x, OpenMP 3x |
+| Convolution 3×3 | 9 | CPU | OpenMP 1.4x, OpenCL 3x |
+| Convolution 15×15 | 225 | GPU | OpenCL 150x, OpenMP 6x |
+
+**Key Insight**: GPU advantage grows exponentially with arithmetic intensity. Memory-bound operations will always favor CPU cache hierarchy, regardless of parallelism.
+
+### When to Choose Each Technology
+
+**Serial C++:**
+- Prototyping and validation
+- Very small datasets (< 1K elements)
+- Irregular algorithms with poor parallelism
+
+**OpenMP:**
+- Medium arithmetic intensity (5-50 ops/access)
+- Datasets that fit in L3 cache (< 30MB)
+- Quick parallelization with minimal code changes
+- Consistent 6-12x speedup across diverse workloads
+
+**OpenCL GPU:**
+- High arithmetic intensity (> 50 ops/access)
+- Large datasets (> 10M elements)
+- Regular memory access patterns
+- When 100x+ speedup justifies development effort
+
+**OpenCL CPU:**
+- When data must stay in CPU memory (no PCIe overhead)
+- Cache-friendly algorithms with data reuse
+- Can outperform discrete GPUs for specific workloads
+
+### Separable Decomposition is Critical
+
+When applicable, separable convolution provides the single biggest optimization:
+- Reduces O(n²×k²) to O(n²×2k)
+- 15×15 kernel: 225 ops → 30 ops (7.5x reduction)
+- Enables 150x speedup vs 100x for non-separable
+
+Many 2D operations can be decomposed: Gaussian blur, box filter, Sobel, etc. Always check if separable optimization applies.
+
+---
+
 ## Summary of Key Takeaways
 
 1. **Always check for conflicting runtimes** - Multiple OpenCL implementations from the same vendor cause enumeration hangs

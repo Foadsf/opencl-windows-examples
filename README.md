@@ -87,7 +87,6 @@ build.bat
 
 **Expected Output**:
 ```
-Using platform: NVIDIA CUDA
 Using device: NVIDIA RTX A2000 Laptop GPU
 Kernel output: Hello from GPU!
 Success!
@@ -98,7 +97,7 @@ Success!
 ### 002: Vector Addition
 **Purpose**: Compare CPU vs GPU performance for vector addition.
 
-**Key Concepts**: Memory transfer overhead, parallel execution, performance measurement
+**Key Concepts**: Memory transfer overhead, parallel execution
 
 ```cmd
 cd examples\002_vector_addition
@@ -107,18 +106,16 @@ build.bat
 
 **Results** (10M elements):
 - Serial C++: 6.12ms (baseline)
-- NVIDIA GPU: 24.23ms (slower due to transfer overhead)
-- Intel UHD GPU: 10.09ms
-- Intel CPU: 7.72ms
+- OpenCL GPU: 24.23ms (SLOWER - memory-bound operation)
 
-**Lesson**: Simple operations are dominated by data transfer costs.
+**Lesson**: Simple operations don't benefit from GPUs due to transfer overhead.
 
 ---
 
 ### 003: Breakeven Analysis
 **Purpose**: Find the vector size where OpenCL becomes faster than serial C++.
 
-**Key Concepts**: Performance profiling, scaling analysis, breakeven points
+**Key Concepts**: Performance profiling, scaling analysis
 
 ```cmd
 cd examples\003_breakeven_analysis
@@ -126,9 +123,8 @@ build.bat
 ```
 
 **Key Findings**:
-- **NVIDIA RTX A2000**: Faster than CPU at 64K elements
-- **Intel UHD Graphics**: Faster than CPU at 256K elements  
-- **Intel CPU (OpenCL)**: Faster than serial at 65K elements
+- **NVIDIA RTX A2000**: Faster at 64K elements
+- **Intel UHD Graphics**: Faster at 256K elements
 
 **Lesson**: GPUs require sufficient workload to amortize overhead.
 
@@ -137,14 +133,108 @@ build.bat
 ### 004: Async Multi-Device
 **Purpose**: Execute kernels simultaneously across multiple devices.
 
-**Key Concepts**: Multiple contexts, command queues, asynchronous execution
+**Key Concepts**: Multiple contexts, asynchronous execution, cross-platform limitations
 
 ```cmd
 cd examples\004_async_multidevice
 build.bat
 ```
 
-**Important Note**: Each platform uses its own time reference, so timing comparisons across platforms are unreliable. Devices do execute concurrently, but profiling events can't directly prove it.
+**Important**: Timing analysis across platforms is unreliable - each vendor uses different time references.
+
+---
+
+### 005: Parallelization Technologies Comparison
+**Purpose**: Compare Serial C++, C++17 std::execution, OpenMP, and OpenCL for matrix-vector multiplication.
+
+**Key Concepts**: Technology trade-offs, memory bandwidth limits
+
+```cmd
+cd examples\005_parallelization_comparison
+build.bat
+```
+
+**Results** (4096×4096 matrix):
+- Serial: 16.4ms
+- OpenMP: 1.5ms (11x speedup) - **Winner**
+- OpenCL GPU: 23.4ms (SLOWER - still memory-bound)
+
+**Lesson**: OpenMP dominates moderate-intensity operations.
+
+---
+
+### 006: Matrix Multiplication - Where GPUs Shine
+**Purpose**: Demonstrate compute-intensive operations where GPUs provide massive speedups.
+
+**Key Concepts**: O(n³) complexity, tiling optimization, GFLOPS
+
+```cmd
+cd examples\006_matrix_multiply
+build.bat
+```
+
+**Results** (2048×2048 matrices):
+- Serial: 16,306ms
+- OpenMP: 5,242ms (3.1x)
+- **NVIDIA GPU (tiled): 105ms (155x speedup)** - **Winner**
+
+**Lesson**: Matrix multiply is the canonical GPU-suitable computation.
+
+---
+
+### 007: Image Convolution - GPU Performance Sweet Spot
+**Purpose**: Show when/where/why OpenCL becomes the optimal choice for image processing.
+
+**Key Concepts**: Arithmetic intensity, separable filters, local memory optimization
+
+```cmd
+cd examples\007_image_convolution
+build.bat
+```
+
+**Results** (4096×4096 image, 15×15 kernel):
+- Serial: 3,370ms
+- OpenMP: 526ms (6.4x)
+- **Intel CPU OpenCL (separable): 22.5ms (150x speedup)** - **Winner**
+- NVIDIA GPU (separable): 28.7ms (117x)
+
+**Lesson**: Image processing with large kernels is OpenCL's sweet spot. Separable decomposition critical.
+
+---
+
+## Performance Summary Across All Examples
+
+| Operation Type | Arithmetic Intensity | Winner | Best Speedup |
+|----------------|---------------------|--------|--------------|
+| Vector addition | Very low (1 op/access) | CPU (Serial) | 1x |
+| Matrix-vector | Low (10 ops/access) | OpenMP | 11x |
+| Matrix multiply | High (2000 ops/access) | OpenCL GPU | 155x |
+| Convolution (small kernel) | Low (9 ops/access) | OpenMP | 1.4x |
+| Convolution (large kernel) | Very high (225 ops/access) | OpenCL | 150x |
+
+**Key Insight**: GPU advantage grows exponentially with arithmetic intensity.
+
+## When to Use Each Technology
+
+**Use Serial C++ when:**
+- Dataset is tiny (< 1K elements)
+- Algorithm has poor parallelism
+- Prototyping and validation
+
+**Use OpenMP when:**
+- Arithmetic intensity is moderate (5-50 ops per memory access)
+- Quick parallelization needed
+- Expect 6-12x speedup across diverse workloads
+
+**Use OpenCL GPU when:**
+- Arithmetic intensity is high (> 50 ops per memory access)
+- Large datasets (> 10M elements)
+- 100x+ speedup justifies development complexity
+
+**Use OpenCL CPU when:**
+- Data must stay in CPU memory
+- Cache-friendly with data reuse
+- Can outperform discrete GPUs for specific patterns
 
 ## Building from Source
 
