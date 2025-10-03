@@ -83,3 +83,6 @@ Desktop.ini
 !*.hpp
 !*.bat
 !*.md
+
+# misc
+repomix-output.xml
